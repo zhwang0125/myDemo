@@ -29,6 +29,90 @@ contrl.expend_128 = function (req, res) {
   res.json({ok: false});
 };
 
+function _select(){
+  var i = 1;
+  var m = 0;
+
+  async.eachSeries(data_128, function(mobile, cb) {
+    console.log('-------------------->' + i);
+    if(i < m){
+      return cb();
+    }
+
+    // 查询用户
+    _selectUser(mobile + '', function(err, user){
+      if(err || !user){
+        console.log('not user------------------------->' + i);
+        console.log('not user------------------------->' + mobile);
+        i++;
+        return cb();
+      }
+
+      // 查询消费纳币
+      _selectLog(user, function(err, total){
+        if(err){
+          console.log('err------------------------->' + i);
+          console.log('err------------------------->' + mobile);
+          i++;
+          return cb(err);
+        }
+
+        fs.appendFile(path.join(__dirname, '../stat_data/data/stat_04.js'),
+          JSON.stringify({mobile: mobile, total: total}) + '\n');
+        i++;
+        cb();
+      });
+    });
+
+  }, function(err){
+    console.log('=======================> 完毕');
+  });
+}
+
+/**
+ * 查询用户信息
+ * @param mobile
+ * @param cb
+ * @private
+ */
+function _selectUser(mobile, cb){
+  var query = new AV.Query(TABLE_NAME_USER);
+  query.equalTo('mobilePhoneNumber', mobile);
+
+  query.first().then(function (user) {
+    cb(null, user);
+  }, function (err) {
+    cb(err);
+  });
+}
+
+/**
+ * 查询用户消费纳币数
+ * @param user
+ * @param cb
+ * @private
+ */
+function _selectLog(user, cb){
+  var query = new AV.Query(TABLE_NAME);
+  query.equalTo('user', user);
+  query.lessThan('changNumber', 0);
+
+  query.find().then(function (results) {
+    if (!results || results.length === 0) {
+      return cb(null, 0);
+    }
+
+    var total = 0;
+    _.forEach(results, function (item) {
+      total += item.get('changNumber');
+    });
+
+    cb(null, total);
+  }, function (err) {
+    cb(err);
+  });
+}
+
 /**
  * 查询结果保存到文件
  * @param i
@@ -69,7 +153,8 @@ function _statExpend(i, len, cb ) {
   ep.all('result', function (total) {
     console.log('------------------->' + i);
     console.log(mobile + '--------' + total);
-    fs.appendFile(path.join(__dirname, '../stat_data/data/stat_04.js'), JSON.stringify({mobile: mobile, total: total}) + '\n');
+    fs.appendFile(path.join(__dirname, '../stat_data/data/stat_04.js'),
+      JSON.stringify({mobile: mobile, total: total}) + '\n');
     i++;
 
     if (i < len) {
@@ -87,7 +172,7 @@ function _statExpend(i, len, cb ) {
  * @private
  */
 function _findExpend(user, cb) {
-  var query = new AV.Query('DonutCoin');
+  var query = new AV.Query(TABLE_NAME);
   query.equalTo('user', user);
   query.lessThan('changNumber', 0);
 
